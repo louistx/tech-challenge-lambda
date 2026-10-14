@@ -18,7 +18,7 @@ jobs:
           POSTGRES_PASSWORD: ci-only-password
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U auth -d auth_test'
+          --health-cmd "pg_isready -U auth -d auth_test"
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       TEST_DATABASE_CONNECTION: Host=localhost;Database=auth_test;Username=auth;Password=ci-only-password
