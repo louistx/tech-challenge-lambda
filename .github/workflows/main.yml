@@ -1,0 +1,107 @@
+name: Lambda CI/CD
+on:
+  pull_request:
+  push:
+    branches: [main, develop, 'feature/**']
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.13-alpine
+        env:
+          POSTGRES_DB: auth_test
+          POSTGRES_USER: auth
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U auth -d auth_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_CONNECTION: Host=localhost;Database=auth_test;Username=auth;Password=ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore --locked-mode -p:NuGetAudit=true -p:NuGetAuditMode=all -p:NuGetAuditLevel=low -p:TreatWarningsAsErrors=true
+      - run: dotnet build --no-restore -c Release --warnaserror
+      - run: dotnet format --no-restore --verify-no-changes
+      - run: dotnet test --no-build -c Release --collect:'XPlat Code Coverage' --results-directory TestResults --logger trx
+      - run: bash scripts/package.sh
+      - name: Validate managed Lambda runtime
+        run: bash scripts/runtime-smoke.sh
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.9
+      - run: terraform -chdir=infra/terraform fmt -check
+      - run: terraform -chdir=infra/terraform init -backend=false -lockfile=readonly
+      - run: terraform -chdir=infra/terraform validate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lambda-${{ github.sha }}
+          path: artifacts/lambda.zip
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-${{ github.sha }}
+          path: TestResults/
+  deploy:
+    needs: validate
+    if: vars.AWS_DEPLOY_ENABLED == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'homolog' }}
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_VAR_environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'homolog' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: lambda-${{ github.sha }}
+          path: artifacts
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.9
+      - name: Environment configuration
+        env:
+          TFVARS_JSON: ${{ vars.TFVARS_JSON }}
+        run: |
+          test -n "$TFVARS_JSON"
+          printf '%s' "$TFVARS_JSON" > infra/terraform/environment.auto.tfvars.json
+      - name: Initialize remote state
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: >-
+          terraform -chdir=infra/terraform init -reconfigure -lockfile=readonly
+          -backend-config="bucket=$STATE_BUCKET"
+          -backend-config="key=tech-challenge-lambda/$TF_VAR_environment/terraform.tfstate"
+          -backend-config="region=$AWS_REGION"
+          -backend-config="encrypt=true"
+          -backend-config="use_lockfile=true"
+      - run: terraform -chdir=infra/terraform plan -input=false -out=deployment.plan
+      - run: terraform -chdir=infra/terraform apply -input=false deployment.plan
+      - name: Smoke and release evidence
+        run: |
+          API_URL=$(terraform -chdir=infra/terraform output -raw api_url)
+          bash scripts/smoke.sh "$API_URL"
+          terraform -chdir=infra/terraform output -json > deployment-outputs.json
+          printf 'Commit: %s\nEnvironment: %s\n' "$GITHUB_SHA" "$TF_VAR_environment" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployment-${{ github.sha }}
+          path: deployment-outputs.json

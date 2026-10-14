@@ -1,0 +1,9 @@
+environment        = "homolog"
+region             = "us-east-1"
+secret_arn         = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:AUTH_SECRET"
+subnet_ids         = ["subnet-REPLACE_A", "subnet-REPLACE_B"]
+security_group_ids = ["sg-REPLACE"]
+allowed_origins    = ["https://REPLACE.example.com"]
+email_sender       = "auth@REPLACE.example.com"
+ses_identity_arn   = "arn:aws:ses:us-east-1:ACCOUNT_ID:identity/REPLACE.example.com"
+jwt_key_id         = "homolog-2026-01"

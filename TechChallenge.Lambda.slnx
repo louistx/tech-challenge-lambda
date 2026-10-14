@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TechChallenge.Lambda/TechChallenge.Lambda.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TechChallenge.Lambda.Tests/TechChallenge.Lambda.Tests.csproj" />
+  </Folder>
+</Solution>

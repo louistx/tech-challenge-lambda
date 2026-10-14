@@ -1,0 +1,22 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+.env
+.local/
+artifacts/
+TestResults/
+**/.terraform/
+*.tfstate*
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars.json
+*.plan
+*.pem
+*.key
+.DS_Store
+infra/terraform/backend.hcl
+
+# Configurações locais de assistentes
+.codex/
+.agents/

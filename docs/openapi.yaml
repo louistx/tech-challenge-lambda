@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: Tech Challenge - Autenticação Lambda
+  version: 1.0.0
+  description: CPF, confirmação por OTP e JWT RS256. Banco e aplicação principal são externos.
+servers:
+  - url: http://localhost:8080
+    description: Ambiente local; substituir pelo output api_url após deploy
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Validar CPF e iniciar desafio de autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [cpf]
+              properties:
+                cpf:
+                  type: string
+                  example: '52998224725'
+                  description: Onze dígitos ou formato 000.000.000-00
+      responses:
+        '202':
+          description: Resposta uniforme para cadastro ativo, inativo ou inexistente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenge_id, expires_in, message]
+                properties:
+                  challenge_id: {type: string, format: uuid}
+                  expires_in: {type: integer, example: 300}
+                  message: {type: string}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/verify:
+    post:
+      operationId: verifyOtp
+      summary: Consumir OTP e emitir JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challenge_id, code]
+              properties:
+                challenge_id: {type: string, format: uuid}
+                code: {type: string, pattern: '^[0-9]{6}$'}
+      responses:
+        '200':
+          description: JWT emitido após comprovação adicional
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in]
+                properties:
+                  access_token: {type: string}
+                  token_type: {type: string, enum: [Bearer]}
+                  expires_in: {type: integer, example: 900}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /auth/me:
+    get:
+      operationId: currentCustomer
+      summary: Demonstrar consumo de rota protegida
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Identificador e permissão do cliente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sub, scope]
+                properties:
+                  sub: {type: string}
+                  scope: {type: string, enum: [customer]}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /.well-known/jwks.json:
+    get:
+      operationId: publicKeys
+      summary: Chaves públicas de verificação
+      responses:
+        '200':
+          description: JSON Web Key Set, sem componentes privados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, kid, alg, use, n, e]
+                      properties:
+                        kty: {type: string, enum: [RSA]}
+                        kid: {type: string}
+                        alg: {type: string, enum: [RS256]}
+                        use: {type: string, enum: [sig]}
+                        n: {type: string}
+                        e: {type: string}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /.well-known/openid-configuration:
+    get:
+      operationId: discovery
+      summary: Metadados de descoberta para verificação JWT; não é um servidor OAuth completo
+      responses:
+        '200':
+          description: Emissor e endereço JWKS
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issuer, jwks_uri]
+                properties:
+                  issuer: {type: string, format: uri}
+                  jwks_uri: {type: string, format: uri}
+                  id_token_signing_alg_values_supported:
+                    type: array
+                    items: {type: string}
+                  response_types_supported:
+                    type: array
+                    items: {type: string}
+                  subject_types_supported:
+                    type: array
+                    items: {type: string}
+        '503': {$ref: '#/components/responses/Unavailable'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      required: [error, correlation_id]
+      properties:
+        error:
+          type: object
+          required: [code]
+          properties:
+            code: {type: string}
+        correlation_id: {type: string}
+  responses:
+    BadRequest:
+      description: CPF ou payload inválido
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: OTP ou JWT inválido, expirado ou reutilizado
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    PayloadTooLarge:
+      description: Corpo acima de 4096 bytes
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    UnsupportedMediaType:
+      description: Esperado application/json
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    RateLimited:
+      description: Limite por CPF ou IP atingido
+      headers:
+        Retry-After: {schema: {type: integer}, description: Até 300 segundos}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unavailable:
+      description: Dependência indisponível ou deadline excedido; detalhes internos omitidos
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
