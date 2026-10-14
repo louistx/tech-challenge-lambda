@@ -17,6 +17,8 @@ Fluxo de branches: `feature/* → develop → main`, com merge por Pull Request.
 4. Em **Settings → Environments**, criar `homolog` (branch `develop`) e `production` (branch `main`). Em produção, exigir revisor e impedir autoaprovação se o plano suportar. O deploy inicia automaticamente após merge e aguarda esse gate quando configurado.
 5. Em **Settings → Collaborators**, convidar `soat-architecture` e confirmar aceitação. Convite e aceite não foram executados.
 
+Antes de habilitar deploys, configurar e autorizar os recursos AWS. Em **Settings → Secrets and variables → Actions → Variables**, definir a variável de repositório `AWS_DEPLOY_ENABLED=true` somente após essa preparação. Ausente ou diferente de `true`, o CI executa normalmente e o job de deploy é ignorado.
+
 Variáveis de **cada Environment**:
 
 | Nome | Conteúdo |

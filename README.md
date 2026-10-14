@@ -89,7 +89,7 @@ Sem `TEST_DATABASE_CONNECTION`, os testes PostgreSQL ficam explicitamente ignora
 
 ## Deploy e integração
 
-A pipeline valida PRs e empacota a função. Push em `develop` implanta em `homolog`; push em `main`, em `production`, após as proteções configuradas no GitHub. AWS OIDC evita chaves estáticas.
+A pipeline valida PRs e empacota a função. Push em `develop` implanta em `homolog`; push em `main`, em `production`, após as proteções configuradas no GitHub e ativação da variável de repositório `AWS_DEPLOY_ENABLED=true`. Até a configuração da AWS, apenas o CI executa. AWS OIDC evita chaves estáticas.
 
 **Não há deploy AWS confirmado.** Configuração de conta, segredos, rede, ambientes e proteção das branches está descrita em [deploy](docs/deploy.md). Links de homologação/produção serão os outputs do Terraform após a implantação real.
 
