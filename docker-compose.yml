@@ -1,0 +1,39 @@
+name: tech-challenge-lambda
+services:
+  postgres:
+    image: postgres:16.13-alpine
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: local-only-password
+    ports: ["127.0.0.1:5434:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/local/001-reference.sql:/docker-entrypoint-initdb.d/001-reference.sql:ro
+      - ./infra/002-auth-state.sql:/docker-entrypoint-initdb.d/002-auth-state.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d auth"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  mailpit:
+    image: axllent/mailpit:v1.29.4
+    ports: ["127.0.0.1:8025:8025", "127.0.0.1:1025:1025"]
+  api:
+    build:
+      context: .
+      target: local
+    env_file: .env
+    environment:
+      DATABASE_CONNECTION: Host=postgres;Database=auth;Username=auth;Password=local-only-password
+      JWT_PRIVATE_KEY_FILE: /app/.local/private.pem
+      SMTP_HOST: mailpit
+    volumes: ["./.local:/app/.local:ro"]
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+volumes:
+  postgres-data:

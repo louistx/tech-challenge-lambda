@@ -1,0 +1,10 @@
+output "api_url" { value = aws_apigatewayv2_api.auth.api_endpoint }
+output "issuer" { value = aws_apigatewayv2_api.auth.api_endpoint }
+output "jwks_url" { value = "${aws_apigatewayv2_api.auth.api_endpoint}/.well-known/jwks.json" }
+output "audience" { value = var.jwt_audience }
+output "lambda_name" { value = aws_lambda_function.auth.function_name }
+output "lambda_version" { value = aws_lambda_function.auth.version }
+output "lambda_alias_arn" { value = aws_lambda_alias.live.arn }
+output "api_id" { value = aws_apigatewayv2_api.auth.id }
+output "jwt_authorizer_id" { value = aws_apigatewayv2_authorizer.jwt.id }
+output "lambda_role_arn" { value = aws_iam_role.lambda.arn }
